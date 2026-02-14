@@ -1,64 +1,71 @@
-#include <GLFW/glfw3.h>
-#include <iostream>
-
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_LENGTH = 600;
-
 int main() {
+    glfwSetErrorCallback(glfwErrorCallback);
 
-	// glfw Config
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if (!glfwInit()) {
+        std::cerr << "GLFW init failed\n";
+        return -1;
+    }
 
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_LENGTH, "VoxelProject", NULL, NULL);
-	if (window == NULL)
-	{
-		std::cout << "Initialization Failed" << std::endl;
-		glfwTerminate();
-		return -1;
-		// Creates Initial Window
-	}
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	glfwMakeContextCurrent(window);
-	while (!glfwWindowShouldClose(window))
-	{
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-		// Loop for keeping the window open.
-	}
-	
-	glfwTerminate();
-	return 0;
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "VoxelProject", nullptr, nullptr);
+    if (!window) {
+        std::cerr << "Window creation failed\n";
+        glfwTerminate();
+        return -1;
+    }
+
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize GLAD\n";
+        glfwTerminate();
+        return -1;
+    }
+
+    glEnable(GL_DEPTH_TEST);
+
+    GLuint program = makeProgram(VS, FS);
+
+    ChunkManager world;
+    world.ensureRadius({0,0,0}, 2);
+    world.rebuildDirty();
+
+    float lastTime = (float)glfwGetTime();
+
+    while (!glfwWindowShouldClose(window)) {
+        float now = (float)glfwGetTime();
+        float dt = now - lastTime;
+        lastTime = now;
+
+        processInput(window);
+        gCamera.processKeyboard(window, dt);
 
 
-}
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+		// Rendering Process
+        glClearColor(0.20f, 0.30f, 0.30f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glUseProgram(program);
 
-	glViewport(0, 0, width, height);
-}
+        glm::mat4 proj = glm::perspective(glm::radians(75.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 500.0f);
+        glm::mat4 view = gCamera.view();
 
-void processInput(GLFWwindow* window) // Input Processing
-{
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
-	while (!glfwWindowShouldClose(window))
-	{
-		// Input
-		processInput(window); 
+        glUniformMatrix4fv(glGetUniformLocation(program, "uProj"), 1, GL_FALSE, &proj[0][0]);
+        glUniformMatrix4fv(glGetUniformLocation(program, "uView"), 1, GL_FALSE, &view[0][0]);
 
-		// Rendering Commands
+        world.drawAll();
 
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
 
-		// Check and Call Events
-
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-	}
+    glfwTerminate(); // Fixed recursive loop closing the program everytime!!!!
+    return 0;
 }
